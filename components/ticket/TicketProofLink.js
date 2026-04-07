@@ -1,3 +1,4 @@
+"use client";
 import { ExternalLink } from "lucide-react";
 
 export default function TicketProofLink({ form, onChange }) {
@@ -14,12 +15,13 @@ export default function TicketProofLink({ form, onChange }) {
         />
         {form.proofLink && (
           
-            href={form.proofLink}
+            <a href={form.proofLink}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-blue-500 hover:text-blue-600 text-sm px-3 py-2 border border-blue-200 rounded-lg"
           >
-            <ExternalLink size={14} /> Open
+            <ExternalLink size={14} />
+            Open
           </a>
         )}
       </div>
