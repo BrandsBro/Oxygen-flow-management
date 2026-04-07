@@ -26,9 +26,6 @@ function LoadingSkeleton() {
       <div className="grid grid-cols-5 gap-4">
         {[...Array(5)].map((_, i) => <div key={i} className="bg-white rounded-xl p-4 border-t-4 border-gray-200 shadow-sm h-24" />)}
       </div>
-      <div className="grid grid-cols-5 gap-4">
-        {[...Array(5)].map((_, i) => <div key={i} className="bg-white rounded-xl p-4 border-t-4 border-gray-200 shadow-sm h-24" />)}
-      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-xl h-72 shadow-sm" />
         <div className="bg-white rounded-xl h-72 shadow-sm" />
@@ -45,6 +42,7 @@ export default function DashboardPage() {
   const [tickets, setTickets] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const isAdmin = user?.role === "Admin";
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -59,8 +57,15 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Filter tickets based on role
+  const myTickets = isAdmin
+    ? tickets
+    : tickets.filter(t =>
+        t["Assigned To"]?.toLowerCase().includes(user?.fullName?.split(" ")[0]?.toLowerCase())
+      );
+
   const today = new Date().toDateString();
-  const todayCount = tickets.filter(
+  const todayCount = myTickets.filter(
     (t) => new Date(t["Created At"]).toDateString() === today
   ).length;
 
@@ -70,45 +75,58 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-sm text-gray-400">Oxygen Concentrator Support Operations</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isAdmin ? "Dashboard" : `Welcome, ${user?.fullName}`}
+          </h1>
+          <p className="text-sm text-gray-400">
+            {isAdmin ? "Oxygen Concentrator Support Operations" : "Your assigned tasks overview"}
+          </p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          + New Task
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            + New Task
+          </button>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-5 gap-4">
+        <StatsCard label="Total Tasks"  value={myTickets.length}                                                                icon={ListTodo}      accent="blue" />
+        <StatsCard label="Pending"      value={myTickets.filter(t => t["Status"] === "Pending").length}                        icon={Clock}         accent="yellow" />
+        <StatsCard label="Overdue"      value={myTickets.filter(t => t["Status"] === "Overdue").length}                        icon={AlertTriangle} accent="red" />
+        <StatsCard label="In Progress"  value={myTickets.filter(t => t["Status"] === "In Progress").length}                    icon={RefreshCw}     accent="blue" />
+        <StatsCard label="Completed"    value={myTickets.filter(t => ["Solved","Closed"].includes(t["Status"])).length}        icon={CheckCircle}   accent="green" />
       </div>
 
       <div className="grid grid-cols-5 gap-4">
-        <StatsCard label="Total Tasks"  value={stats["Total Tickets"]}  icon={ListTodo}      accent="blue" />
-        <StatsCard label="Pending"      value={stats["Pending"]}        icon={Clock}         accent="yellow" />
-        <StatsCard label="Overdue"      value={stats["Overdue"]}        icon={AlertTriangle} accent="red" />
-        <StatsCard label="In Progress"  value={stats["In Progress"]}    icon={RefreshCw}     accent="blue" />
-        <StatsCard label="Completed"    value={stats["Solved"]}         icon={CheckCircle}   accent="green" />
+        <StatsCard label="Urgent"      value={myTickets.filter(t => t["Priority"] === "Urgent").length}           icon={Zap}          accent="red" />
+        <StatsCard label="Refunds"     value={myTickets.filter(t => t["Issue Type"] === "Refund Request").length} icon={RotateCcw}    accent="orange" />
+        <StatsCard label="Returns"     value={myTickets.filter(t => t["Issue Type"] === "Return Request").length} icon={RefreshCw}    accent="purple" />
+        <StatsCard label="Chargebacks" value={myTickets.filter(t => t["Issue Type"] === "Chargeback").length}     icon={Shield}       accent="red" />
+        <StatsCard label="Today"       value={todayCount}                                                          icon={CalendarDays} accent="green" />
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
-        <StatsCard label="Urgent"      value={tickets.filter(t => t["Priority"] === "Urgent").length}           icon={Zap}          accent="red" />
-        <StatsCard label="Refunds"     value={tickets.filter(t => t["Issue Type"] === "Refund Request").length} icon={RotateCcw}    accent="orange" />
-        <StatsCard label="Returns"     value={tickets.filter(t => t["Issue Type"] === "Return Request").length} icon={RefreshCw}    accent="purple" />
-        <StatsCard label="Chargebacks" value={tickets.filter(t => t["Issue Type"] === "Chargeback").length}     icon={Shield}       accent="red" />
-        <StatsCard label="Today"       value={todayCount}                                                        icon={CalendarDays} accent="green" />
-      </div>
+      {/* Charts - admin only */}
+      {isAdmin && (
+        <div className="grid grid-cols-2 gap-4">
+          <TasksByMemberChart tickets={tickets} />
+          <TasksByStatusChart stats={stats} />
+        </div>
+      )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <TasksByMemberChart tickets={tickets} />
-        <TasksByStatusChart stats={stats} />
-      </div>
+      {/* Recent Tasks */}
+      <RecentTasks tickets={myTickets} />
 
-      <RecentTasks tickets={tickets} />
-
-      <NewTaskModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreated={() => load()}
-      />
+      {isAdmin && (
+        <NewTaskModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onCreated={() => load()}
+        />
+      )}
     </div>
   );
 }

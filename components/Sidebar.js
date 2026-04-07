@@ -7,20 +7,23 @@ import {
   Users, FileText, UsersRound, Settings, LogOut
 } from "lucide-react";
 
-const navItems = [
-  { label: "Dashboard",      href: "/dashboard",          icon: LayoutDashboard },
-  { label: "All Tasks",      href: "/dashboard/tasks",    icon: ListTodo },
-  { label: "My Tasks",       href: "/dashboard/mytasks",  icon: User },
-  { label: "Daily Board",    href: "/dashboard/daily",    icon: CalendarDays },
-  { label: "Customer Cases", href: "/dashboard/cases",    icon: Users },
-  { label: "Reports",        href: "/dashboard/reports",  icon: FileText },
-  { label: "Team",           href: "/dashboard/team",     icon: UsersRound },
-  { label: "Settings",       href: "/dashboard/settings", icon: Settings },
+const allNavItems = [
+  { label: "Dashboard",      href: "/dashboard",          icon: LayoutDashboard, adminOnly: false },
+  { label: "All Tasks",      href: "/dashboard/tasks",    icon: ListTodo,        adminOnly: true  },
+  { label: "My Tasks",       href: "/dashboard/mytasks",  icon: User,            adminOnly: false },
+  { label: "Daily Board",    href: "/dashboard/daily",    icon: CalendarDays,    adminOnly: false },
+  { label: "Customer Cases", href: "/dashboard/cases",    icon: Users,           adminOnly: true  },
+  { label: "Reports",        href: "/dashboard/reports",  icon: FileText,        adminOnly: true  },
+  { label: "Team",           href: "/dashboard/team",     icon: UsersRound,      adminOnly: true  },
+  { label: "Settings",       href: "/dashboard/settings", icon: Settings,        adminOnly: true  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === "Admin";
+
+  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <div className="w-48 bg-gray-950 flex flex-col h-full shrink-0">
