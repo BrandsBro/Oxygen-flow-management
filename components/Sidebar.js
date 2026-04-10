@@ -1,7 +1,9 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { getPermissions } from "@/lib/api";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
   Users, FileText, UsersRound, Settings, LogOut,
@@ -9,24 +11,48 @@ import {
 } from "lucide-react";
 
 const allNavItems = [
-  { label: "Dashboard",      href: "/dashboard",            icon: LayoutDashboard, adminOnly: false },
-  { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        adminOnly: true  },
-  { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            adminOnly: false },
-  { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    adminOnly: false },
-  { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           adminOnly: false },
-  { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         adminOnly: true  },
-  { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           adminOnly: true  },
-  { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        adminOnly: true  },
-  { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      adminOnly: true  },
-  { label: "Authority",      href: "/dashboard/authority",  icon: ShieldCheck,     adminOnly: true  },
-  { label: "Settings",       href: "/dashboard/settings",   icon: Settings,        adminOnly: true  },
+  { label: "Dashboard",      href: "/dashboard",            icon: LayoutDashboard, key: "dashboard",   adminOnly: false },
+  { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        key: "all_tasks",   adminOnly: true  },
+  { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            key: "my_tasks",    adminOnly: false },
+  { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    key: "daily_board", adminOnly: false },
+  { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           key: "attendance",  adminOnly: false },
+  { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         key: "invoices",    adminOnly: true  },
+  { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           key: "cases",       adminOnly: true  },
+  { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        key: "reports",     adminOnly: true  },
+  { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      key: "team",        adminOnly: true  },
+  { label: "Authority",      href: "/dashboard/authority",  icon: ShieldCheck,     key: "authority",   adminOnly: true  },
+  { label: "Settings",       href: "/dashboard/settings",   icon: Settings,        key: "settings",    adminOnly: true  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "Admin";
-  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
+  const [agentPerms, setAgentPerms] = useState(null);
+
+  useEffect(() => {
+    if (!isAdmin && user?.id) {
+      getPermissions().then(res => {
+        if (res.success) {
+          const myPerm = res.data.find(p => p["Member ID"] === user.id);
+          setAgentPerms(myPerm || null);
+        }
+      });
+    }
+  }, [user?.id]);
+
+  const navItems = allNavItems.filter(item => {
+    // Admins see everything
+    if (isAdmin) return true;
+    // Always show dashboard
+    if (item.key === "dashboard") return true;
+    // Hide admin-only pages
+    if (item.adminOnly) return false;
+    // Check permissions for agent
+    if (agentPerms) return agentPerms[item.key] === true;
+    // Default: show my_tasks, daily_board, attendance
+    return ["my_tasks", "daily_board", "attendance"].includes(item.key);
+  });
 
   return (
     <div className="w-48 bg-gray-950 flex flex-col h-full shrink-0">
