@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { getSales, deleteSale } from "@/lib/api";
 import AddSaleModal from "@/components/sales/AddSaleModal";
+import DeleteModal from "@/components/ui/DeleteModal";
 import { ShoppingCart, TrendingUp, Package, Trash2, Plus, RefreshCw } from "lucide-react";
 
 function getTodayStr() {
@@ -34,6 +35,8 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     const today = getTodayStr();
@@ -47,10 +50,11 @@ export default function SalesPage() {
 
   const handleRefresh = () => { setRefreshing(true); load(); };
 
-  const handleDelete = async (id) => {
-    if (!canDelete) return;
-    if (!confirm("Delete this sale?")) return;
-    await deleteSale(id);
+  const handleDelete = async () => {
+    setDeleting(true);
+    await deleteSale(deleteTarget["Sale ID"]);
+    setDeleting(false);
+    setDeleteTarget(null);
     await load();
   };
 
@@ -90,6 +94,7 @@ export default function SalesPage() {
         </div>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-400 flex items-center gap-4">
           <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -120,6 +125,7 @@ export default function SalesPage() {
         </div>
       </div>
 
+      {/* Channel Breakdown */}
       {Object.keys(byChannel).length > 0 && (
         <div className="grid grid-cols-4 gap-3">
           {Object.entries(byChannel).map(([ch, data]) => (
@@ -134,6 +140,7 @@ export default function SalesPage() {
         </div>
       )}
 
+      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">Sales Log</p>
@@ -146,9 +153,7 @@ export default function SalesPage() {
           <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
             <ShoppingCart size={24} className="text-gray-300" />
             <p className="text-sm">No sales yet today</p>
-            {canAdd && (
-              <button onClick={() => setModalOpen(true)} className="text-blue-500 text-xs hover:underline">Add first sale</button>
-            )}
+            {canAdd && <button onClick={() => setModalOpen(true)} className="text-blue-500 text-xs hover:underline">Add first sale</button>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -192,8 +197,8 @@ export default function SalesPage() {
                     </td>
                     {canDelete && (
                       <td className="px-4 py-3">
-                        <button onClick={() => handleDelete(sale["Sale ID"])}
-                          className="text-red-400 hover:text-red-600 transition-colors">
+                        <button onClick={() => setDeleteTarget(sale)}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                           <Trash2 size={14} />
                         </button>
                       </td>
@@ -214,6 +219,15 @@ export default function SalesPage() {
       </div>
 
       {canAdd && <AddSaleModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={() => load()} />}
+
+      <DeleteModal
+        open={!!deleteTarget}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title="Delete Sale?"
+        message={`Sale "${deleteTarget?.["Product"]}" will be permanently deleted.`}
+      />
     </div>
   );
 }
