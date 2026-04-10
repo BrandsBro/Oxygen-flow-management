@@ -13,13 +13,18 @@ function to12hr(time24) {
   return `${hour12}:${m} ${ampm}`;
 }
 
-// Match exactly what Apps Script returns: MM/DD/YYYY
 function getTodayStr() {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const yyyy = d.getFullYear();
   return `${mm}/${dd}/${yyyy}`;
+}
+
+function displayDate(dateStr) {
+  if (!dateStr) return "";
+  const [m, d, y] = dateStr.split("/");
+  return `${d}/${m}/${y}`;
 }
 
 export default function AttendancePage() {
@@ -39,14 +44,11 @@ export default function AttendancePage() {
   }, []);
 
   async function load() {
-    const member = isAdmin ? null : user?.fullName;
+    if (!user?.fullName) return;
+    const member = isAdmin ? null : user.fullName;
     const res = await getAttendance(member);
-    console.log("Attendance data:", res.data);
-
     if (res.success) {
       const today = getTodayStr();
-      console.log("Today string:", today);
-
       const grouped = {};
       res.data.forEach((log) => {
         const key = `${log["Member Name"]}_${log["Date"]}`;
@@ -59,41 +61,56 @@ export default function AttendancePage() {
             totalHours: log["Total Hours"] || "",
             status:     log["Status"]      || "",
           };
-        } else {
-          if (!grouped[key].clockIn && log["Clock In"]) grouped[key].clockIn = log["Clock In"];
-          if (log["Clock Out"]) {
-            grouped[key].clockOut   = log["Clock Out"];
-            grouped[key].totalHours = log["Total Hours"];
-            grouped[key].status     = log["Status"];
-          }
         }
       });
 
       const arr = Object.values(grouped).sort((a, b) => {
-        // Sort by date descending
-        const parseDate = (s) => {
-          const [m, d, y] = s.split("/");
-          return new Date(`${y}-${m}-${d}`);
-        };
-        return parseDate(b.date) - parseDate(a.date);
+        const parse = (s) => { const [m,d,y] = s.split("/"); return new Date(`${y}-${m}-${d}`); };
+        return parse(b.date) - parse(a.date);
       });
 
       setLogs(arr);
 
-      const todayKey = `${user?.fullName}_${today}`;
-      console.log("Looking for key:", todayKey, "Available:", Object.keys(grouped));
-      setTodayLog(grouped[todayKey] || null);
+      // Find today's log for current user
+      const myTodayLog = res.data.find(
+        l => l["Member Name"] === user.fullName && l["Date"] === today
+      );
+
+      if (myTodayLog) {
+        setTodayLog({
+          member:     myTodayLog["Member Name"],
+          date:       myTodayLog["Date"],
+          clockIn:    myTodayLog["Clock In"]    || "",
+          clockOut:   myTodayLog["Clock Out"]   || "",
+          totalHours: myTodayLog["Total Hours"] || "",
+          status:     myTodayLog["Status"]      || "",
+        });
+      } else {
+        setTodayLog(null);
+      }
     }
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  // Only load when user is available
+  useEffect(() => {
+    if (user?.fullName) load();
+  }, [user?.fullName]);
 
   const handleClockIn = async () => {
     setActionLoading(true); setMessage(""); setError("");
-    const res = await clockIn(user?.fullName);
+    const res = await clockIn(user.fullName);
     if (res.success) {
       setMessage(res.message);
+      // Optimistically set todayLog so Clock Out shows immediately
+      setTodayLog({
+        member: user.fullName,
+        date: getTodayStr(),
+        clockIn: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+        clockOut: "",
+        totalHours: "",
+        status: "Active",
+      });
       setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else {
       setError(res.message);
@@ -103,7 +120,7 @@ export default function AttendancePage() {
 
   const handleClockOut = async () => {
     setActionLoading(true); setMessage(""); setError("");
-    const res = await clockOut(user?.fullName);
+    const res = await clockOut(user.fullName);
     if (res.success) {
       setMessage(`${res.message} • Total: ${res.totalHours} hrs`);
       setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
@@ -113,8 +130,8 @@ export default function AttendancePage() {
     }
   };
 
-  const isClockedIn  = todayLog && todayLog.clockIn && !todayLog.clockOut;
-  const isClockedOut = todayLog && todayLog.clockIn && todayLog.clockOut;
+  const isClockedIn  = !!(todayLog && todayLog.clockIn && !todayLog.clockOut);
+  const isClockedOut = !!(todayLog && todayLog.clockIn && todayLog.clockOut);
 
   const hours12 = currentTime.getHours() % 12 || 12;
   const minutes = String(currentTime.getMinutes()).padStart(2, "0");
@@ -122,21 +139,12 @@ export default function AttendancePage() {
   const ampm    = currentTime.getHours() >= 12 ? "PM" : "AM";
   const completedDays = logs.filter(l => l.member === user?.fullName && l.status === "Completed").length;
 
-  // Format date for display: MM/DD/YYYY → DD/MM/YYYY
-  function displayDate(dateStr) {
-    if (!dateStr) return "";
-    const [m, d, y] = dateStr.split("/");
-    return `${d}/${m}/${y}`;
-  }
-
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Attendance</h1>
         <p className="text-sm text-gray-400">
-          {new Date().toLocaleDateString("en-GB", {
-            weekday: "long", day: "numeric", month: "long", year: "numeric"
-          })}
+          {new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}
         </p>
       </div>
 
@@ -149,7 +157,7 @@ export default function AttendancePage() {
                 <p className="text-xl font-bold text-blue-400 mb-1">{ampm}</p>
               </div>
               <p className="text-gray-500 text-xs mt-2">
-                {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {new Date().toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" })}
               </p>
             </div>
 
