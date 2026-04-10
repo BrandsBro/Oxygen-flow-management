@@ -16,13 +16,20 @@ const statuses = [
   "Waiting for Carrier", "Waiting for Internal Review",
   "Pending", "Solved", "Closed", "Overdue", "Blocked"
 ];
-const channels = ["Email", "Messenger", "Phone Call", "Shopify", "PayPal", "Stripe", "Carrier"];
+const channels = [
+  "Email", "Messenger", "Phone Call", "Shopify",
+  "PayPal", "Stripe", "Carrier", "Website"
+];
 
 const defaultForm = {
   title: "", customerName: "", orderNumber: "",
   issueType: "General Support", priority: "Medium",
   status: "New", channel: "", assignedTo: "",
   dueDate: "", description: "", internalNotes: "", proofLink: "",
+  // Email fields
+  customerEmail: "", emailSubject: "", emailDate: "",
+  // Website fields
+  websiteUrl: "", websitePage: "", websiteIssue: "",
 };
 
 export default function NewTaskModal({ open, onClose, onCreated }) {
@@ -40,7 +47,6 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     if (open) { setForm(defaultForm); setError(""); }
   }, [open]);
 
-  // Close on ESC
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
@@ -54,16 +60,27 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     setLoading(true);
     setError("");
     try {
-      const res = await createTicket({ ...form, createdBy: user?.fullName });
-      if (res.success) {
-        onCreated?.();
-        onClose();
-      } else {
-        setError("Failed to create task. Try again.");
+      // Build description with channel-specific data
+      let extraInfo = form.description || "";
+      if (form.channel === "Email") {
+        if (form.customerEmail) extraInfo += `\n\nEmail: ${form.customerEmail}`;
+        if (form.emailSubject)  extraInfo += `\nSubject: ${form.emailSubject}`;
+        if (form.emailDate)     extraInfo += `\nEmail Date: ${form.emailDate}`;
       }
-    } catch {
-      setError("Something went wrong.");
-    }
+      if (form.channel === "Website") {
+        if (form.websiteUrl)   extraInfo += `\n\nWebsite URL: ${form.websiteUrl}`;
+        if (form.websitePage)  extraInfo += `\nPage: ${form.websitePage}`;
+        if (form.websiteIssue) extraInfo += `\nIssue on site: ${form.websiteIssue}`;
+      }
+
+      const res = await createTicket({
+        ...form,
+        description: extraInfo.trim(),
+        createdBy: user?.fullName
+      });
+      if (res.success) { onCreated?.(); onClose(); }
+      else setError("Failed to create task. Try again.");
+    } catch { setError("Something went wrong."); }
     setLoading(false);
   };
 
@@ -71,13 +88,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
@@ -89,48 +100,31 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">{error}</div>
           )}
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => set("title", e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
+            <input type="text" value={form.title} onChange={(e) => set("title", e.target.value)}
               placeholder="Enter task title"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-            />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
           </div>
 
           {/* Customer Name + Order Number */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
-              <input
-                type="text"
-                value={form.customerName}
-                onChange={(e) => set("customerName", e.target.value)}
+              <input type="text" value={form.customerName} onChange={(e) => set("customerName", e.target.value)}
                 placeholder="Customer name"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-              />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
-              <input
-                type="text"
-                value={form.orderNumber}
-                onChange={(e) => set("orderNumber", e.target.value)}
+              <input type="text" value={form.orderNumber} onChange={(e) => set("orderNumber", e.target.value)}
                 placeholder="Order #"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-              />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
             </div>
           </div>
 
@@ -138,21 +132,15 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Issue Type</label>
-              <select
-                value={form.issueType}
-                onChange={(e) => set("issueType", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
-              >
+              <select value={form.issueType} onChange={(e) => set("issueType", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white">
                 {issueTypes.map((t) => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-              <select
-                value={form.priority}
-                onChange={(e) => set("priority", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
-              >
+              <select value={form.priority} onChange={(e) => set("priority", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white">
                 {priorities.map((p) => <option key={p}>{p}</option>)}
               </select>
             </div>
@@ -162,36 +150,77 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
-              >
+              <select value={form.status} onChange={(e) => set("status", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white">
                 {statuses.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Channel</label>
-              <select
-                value={form.channel}
-                onChange={(e) => set("channel", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
-              >
+              <select value={form.channel} onChange={(e) => set("channel", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white">
                 <option value="">Select channel</option>
                 {channels.map((c) => <option key={c}>{c}</option>)}
               </select>
             </div>
           </div>
 
+          {/* EMAIL FIELDS */}
+          {form.channel === "Email" && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">📧 Email Details</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Email</label>
+                <input type="email" value={form.customerEmail} onChange={(e) => set("customerEmail", e.target.value)}
+                  placeholder="customer@example.com"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Subject</label>
+                <input type="text" value={form.emailSubject} onChange={(e) => set("emailSubject", e.target.value)}
+                  placeholder="Subject of the email"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Date</label>
+                <input type="datetime-local" value={form.emailDate} onChange={(e) => set("emailDate", e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white" />
+              </div>
+            </div>
+          )}
+
+          {/* WEBSITE FIELDS */}
+          {form.channel === "Website" && (
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">🌐 Website Details</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
+                <input type="url" value={form.websiteUrl} onChange={(e) => set("websiteUrl", e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Page / Section</label>
+                <input type="text" value={form.websitePage} onChange={(e) => set("websitePage", e.target.value)}
+                  placeholder="e.g. Checkout, Product Page, Homepage"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Issue on Website</label>
+                <textarea value={form.websiteIssue} onChange={(e) => set("websiteIssue", e.target.value)}
+                  placeholder="Describe the issue on the website..."
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white resize-none" />
+              </div>
+            </div>
+          )}
+
           {/* Assign To + Due Date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
-              <select
-                value={form.assignedTo}
-                onChange={(e) => set("assignedTo", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white"
-              >
+              <select value={form.assignedTo} onChange={(e) => set("assignedTo", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white">
                 <option value="">Select member</option>
                 {members.map((m) => (
                   <option key={m["Member ID"]} value={m["Full Name"]}>
@@ -202,65 +231,44 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-              <input
-                type="datetime-local"
-                value={form.dueDate}
-                onChange={(e) => set("dueDate", e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-              />
+              <input type="datetime-local" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
             </div>
           </div>
 
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="Describe the issue..."
-              rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"
-            />
+            <textarea value={form.description} onChange={(e) => set("description", e.target.value)}
+              placeholder="Describe the issue..." rows={3}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none" />
           </div>
 
           {/* Internal Notes + Proof Link */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Internal Notes</label>
-              <textarea
-                value={form.internalNotes}
-                onChange={(e) => set("internalNotes", e.target.value)}
-                placeholder="Internal notes..."
-                rows={3}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"
-              />
+              <textarea value={form.internalNotes} onChange={(e) => set("internalNotes", e.target.value)}
+                placeholder="Internal notes..." rows={3}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Proof / Reference Link</label>
-              <input
-                type="url"
-                value={form.proofLink}
-                onChange={(e) => set("proofLink", e.target.value)}
+              <input type="url" value={form.proofLink} onChange={(e) => set("proofLink", e.target.value)}
                 placeholder="https://"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-              />
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
             </div>
           </div>
         </div>
 
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+          <button onClick={onClose}
+            className="px-5 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             Cancel
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-5 py-2.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors"
-          >
+          <button onClick={handleSubmit} disabled={loading}
+            className="px-5 py-2.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors">
             {loading ? "Creating..." : "Create Task"}
           </button>
         </div>
