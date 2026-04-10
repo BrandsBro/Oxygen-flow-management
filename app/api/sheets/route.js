@@ -1,24 +1,52 @@
 const SHEET_API = process.env.SHEET_API_URL;
 
+// Simple in-memory cache
+const cache = new Map();
+const CACHE_TTL = 30 * 1000; // 30 seconds
+
+function getCached(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.time > CACHE_TTL) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCached(key, data) {
+  cache.set(key, { data, time: Date.now() });
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const params = searchParams.toString();
-    const url = `${SHEET_API}?${params}`;
+    const action = searchParams.get("action");
 
-    const res = await fetch(url, {
+    // Only cache GET requests for read operations
+    const cacheable = ["getTickets", "getMembers", "getStats", "getDashboardData", "getAttendance"];
+    if (cacheable.includes(action)) {
+      const cached = getCached(params);
+      if (cached) {
+        return Response.json(cached, {
+          headers: { "X-Cache": "HIT" }
+        });
+      }
+    }
+
+    const res = await fetch(`${SHEET_API}?${params}`, {
       method: "GET",
       redirect: "follow",
-      headers: {
-        "Accept": "application/json",
-      },
     });
 
-    // Log what we actually got back
     const text = await res.text();
-    console.log("RAW RESPONSE:", text.substring(0, 200));
-
     const data = JSON.parse(text);
+
+    if (cacheable.includes(action)) {
+      setCached(params, data);
+    }
+
     return Response.json(data);
   } catch (err) {
     console.error("GET error:", err.message);
@@ -29,21 +57,19 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    console.log("Sending to sheets:", body);
 
     const res = await fetch(SHEET_API, {
       method: "POST",
       redirect: "follow",
-      headers: {
-        "Accept": "application/json",
-      },
       body: JSON.stringify(body),
     });
 
     const text = await res.text();
-    console.log("RAW RESPONSE:", text.substring(0, 200));
-
     const data = JSON.parse(text);
+
+    // Clear cache on any write operation
+    cache.clear();
+
     return Response.json(data);
   } catch (err) {
     console.error("POST error:", err.message);

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { getStats, getTickets } from "@/lib/api";
+import { getDashboardData } from "@/lib/api";
 import StatsCard from "@/components/StatsCard";
 import RecentTasks from "@/components/RecentTasks";
 import TasksByMemberChart from "@/components/charts/TasksByMemberChart";
@@ -22,6 +22,9 @@ function LoadingSkeleton() {
           <div className="h-4 w-64 bg-gray-100 rounded" />
         </div>
         <div className="h-9 w-28 bg-gray-200 rounded-lg" />
+      </div>
+      <div className="grid grid-cols-5 gap-4">
+        {[...Array(5)].map((_, i) => <div key={i} className="bg-white rounded-xl p-4 border-t-4 border-gray-200 shadow-sm h-24" />)}
       </div>
       <div className="grid grid-cols-5 gap-4">
         {[...Array(5)].map((_, i) => <div key={i} className="bg-white rounded-xl p-4 border-t-4 border-gray-200 shadow-sm h-24" />)}
@@ -49,15 +52,17 @@ export default function DashboardPage() {
   }, [user, loading]);
 
   async function load() {
-    const [s, t] = await Promise.all([getStats(), getTickets()]);
-    if (s.success) setStats(s.data);
-    if (t.success) setTickets(t.data);
+    // ONE call instead of two!
+    const res = await getDashboardData();
+    if (res.success) {
+      setStats(res.stats || {});
+      setTickets(res.tickets || []);
+    }
     setFetching(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  // Filter tickets based on role
   const myTickets = isAdmin
     ? tickets
     : tickets.filter(t =>
@@ -92,7 +97,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-5 gap-4">
         <StatsCard label="Total Tasks"  value={myTickets.length}                                                                icon={ListTodo}      accent="blue" />
         <StatsCard label="Pending"      value={myTickets.filter(t => t["Status"] === "Pending").length}                        icon={Clock}         accent="yellow" />
@@ -109,7 +113,6 @@ export default function DashboardPage() {
         <StatsCard label="Today"       value={todayCount}                                                          icon={CalendarDays} accent="green" />
       </div>
 
-      {/* Charts - admin only */}
       {isAdmin && (
         <div className="grid grid-cols-2 gap-4">
           <TasksByMemberChart tickets={tickets} />
@@ -117,7 +120,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Recent Tasks */}
       <RecentTasks tickets={myTickets} />
 
       {isAdmin && (
