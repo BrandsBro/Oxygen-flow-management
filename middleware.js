@@ -4,23 +4,21 @@ export function middleware(request) {
   const userCookie = request.cookies.get("ofm_user");
   const { pathname } = request.nextUrl;
 
-  // Not logged in → go to login
   if (pathname.startsWith("/dashboard") && !userCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Already logged in → skip login page
   if (pathname === "/login" && userCookie) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Protect admin-only pages
   const adminOnlyPaths = [
     "/dashboard/tasks",
     "/dashboard/cases",
     "/dashboard/reports",
     "/dashboard/team",
     "/dashboard/settings",
+    "/dashboard/invoices",
   ];
 
   if (userCookie) {
