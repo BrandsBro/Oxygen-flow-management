@@ -13,16 +13,13 @@ function to12hr(time24) {
   return `${hour12}:${m} ${ampm}`;
 }
 
-// Fix date — handle both ISO and en-GB formats
-function formatDate(raw) {
-  if (!raw) return "";
-  // If it's ISO format like 2026-10-03T18:00:00.000Z
-  if (String(raw).includes("T")) {
-    const d = new Date(raw);
-    return d.toLocaleDateString("en-GB");
-  }
-  // Already in DD/MM/YYYY format
-  return String(raw);
+// Match exactly what Apps Script returns: MM/DD/YYYY
+function getTodayStr() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
 }
 
 export default function AttendancePage() {
@@ -44,15 +41,19 @@ export default function AttendancePage() {
   async function load() {
     const member = isAdmin ? null : user?.fullName;
     const res = await getAttendance(member);
+    console.log("Attendance data:", res.data);
+
     if (res.success) {
+      const today = getTodayStr();
+      console.log("Today string:", today);
+
       const grouped = {};
       res.data.forEach((log) => {
-        const fixedDate = formatDate(log["Date"]);
-        const key = `${log["Member Name"]}_${fixedDate}`;
+        const key = `${log["Member Name"]}_${log["Date"]}`;
         if (!grouped[key]) {
           grouped[key] = {
             member:     log["Member Name"],
-            date:       fixedDate,
+            date:       log["Date"],
             clockIn:    log["Clock In"]    || "",
             clockOut:   log["Clock Out"]   || "",
             totalHours: log["Total Hours"] || "",
@@ -69,15 +70,18 @@ export default function AttendancePage() {
       });
 
       const arr = Object.values(grouped).sort((a, b) => {
-        const da = a.date.split("/").reverse().join("-");
-        const db = b.date.split("/").reverse().join("-");
-        return new Date(db) - new Date(da);
+        // Sort by date descending
+        const parseDate = (s) => {
+          const [m, d, y] = s.split("/");
+          return new Date(`${y}-${m}-${d}`);
+        };
+        return parseDate(b.date) - parseDate(a.date);
       });
 
       setLogs(arr);
 
-      const today = new Date().toLocaleDateString("en-GB");
       const todayKey = `${user?.fullName}_${today}`;
+      console.log("Looking for key:", todayKey, "Available:", Object.keys(grouped));
       setTodayLog(grouped[todayKey] || null);
     }
     setLoading(false);
@@ -90,10 +94,7 @@ export default function AttendancePage() {
     const res = await clockIn(user?.fullName);
     if (res.success) {
       setMessage(res.message);
-      setTimeout(async () => {
-        await load();
-        setActionLoading(false);
-      }, 1500);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else {
       setError(res.message);
       setActionLoading(false);
@@ -105,10 +106,7 @@ export default function AttendancePage() {
     const res = await clockOut(user?.fullName);
     if (res.success) {
       setMessage(`${res.message} • Total: ${res.totalHours} hrs`);
-      setTimeout(async () => {
-        await load();
-        setActionLoading(false);
-      }, 1500);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else {
       setError(res.message);
       setActionLoading(false);
@@ -124,6 +122,13 @@ export default function AttendancePage() {
   const ampm    = currentTime.getHours() >= 12 ? "PM" : "AM";
   const completedDays = logs.filter(l => l.member === user?.fullName && l.status === "Completed").length;
 
+  // Format date for display: MM/DD/YYYY → DD/MM/YYYY
+  function displayDate(dateStr) {
+    if (!dateStr) return "";
+    const [m, d, y] = dateStr.split("/");
+    return `${d}/${m}/${y}`;
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -136,14 +141,11 @@ export default function AttendancePage() {
       </div>
 
       <div className="grid grid-cols-3 gap-5">
-        {/* Clock Widget */}
         <div className="col-span-1">
           <div className="bg-gray-950 rounded-2xl p-6 text-center space-y-5">
             <div>
               <div className="flex items-end justify-center gap-1">
-                <p className="text-5xl font-bold text-white font-mono">
-                  {hours12}:{minutes}:{seconds}
-                </p>
+                <p className="text-5xl font-bold text-white font-mono">{hours12}:{minutes}:{seconds}</p>
                 <p className="text-xl font-bold text-blue-400 mb-1">{ampm}</p>
               </div>
               <p className="text-gray-500 text-xs mt-2">
@@ -166,9 +168,7 @@ export default function AttendancePage() {
               isClockedOut ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
               "bg-gray-800 text-gray-400"
             }`}>
-              {isClockedIn  ? "● Currently Working" :
-               isClockedOut ? "✓ Shift Completed"   :
-               "○ Not Clocked In"}
+              {isClockedIn ? "● Currently Working" : isClockedOut ? "✓ Shift Completed" : "○ Not Clocked In"}
             </div>
 
             {todayLog && (
@@ -199,36 +199,20 @@ export default function AttendancePage() {
               </div>
             )}
 
-            {message && (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-                <p className="text-green-400 text-xs">{message}</p>
-              </div>
-            )}
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <p className="text-red-400 text-xs">{error}</p>
-              </div>
-            )}
+            {message && <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2"><p className="text-green-400 text-xs">{message}</p></div>}
+            {error   && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"><p className="text-red-400 text-xs">{error}</p></div>}
 
             <div className="space-y-2">
               {!todayLog && (
-                <button
-                  onClick={handleClockIn}
-                  disabled={actionLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white font-semibold py-3.5 rounded-xl transition-colors"
-                >
-                  <LogIn size={18} />
-                  {actionLoading ? "Saving..." : "Clock In"}
+                <button onClick={handleClockIn} disabled={actionLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white font-semibold py-3.5 rounded-xl transition-colors">
+                  <LogIn size={18} />{actionLoading ? "Saving..." : "Clock In"}
                 </button>
               )}
               {isClockedIn && (
-                <button
-                  onClick={handleClockOut}
-                  disabled={actionLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-900 text-white font-semibold py-3.5 rounded-xl transition-colors"
-                >
-                  <LogOut size={18} />
-                  {actionLoading ? "Saving..." : "Clock Out"}
+                <button onClick={handleClockOut} disabled={actionLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-900 text-white font-semibold py-3.5 rounded-xl transition-colors">
+                  <LogOut size={18} />{actionLoading ? "Saving..." : "Clock Out"}
                 </button>
               )}
               {isClockedOut && (
@@ -240,7 +224,6 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="col-span-2">
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -275,25 +258,20 @@ export default function AttendancePage() {
                   </thead>
                   <tbody>
                     {logs.map((log, i) => {
-                      const today = new Date().toLocaleDateString("en-GB");
-                      const isToday = log.date === today;
+                      const isToday = log.date === getTodayStr();
                       return (
                         <tr key={i} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${isToday ? "bg-blue-50/40" : ""}`}>
                           {isAdmin && (
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                                  {log.member?.[0]}
-                                </div>
+                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">{log.member?.[0]}</div>
                                 <span className="font-medium text-gray-700">{log.member}</span>
                               </div>
                             </td>
                           )}
                           <td className="px-4 py-3 text-gray-600 font-medium">
-                            {log.date}
-                            {isToday && (
-                              <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-xs">Today</span>
-                            )}
+                            {displayDate(log.date)}
+                            {isToday && <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-xs">Today</span>}
                           </td>
                           <td className="px-4 py-3 text-green-600 font-semibold">{to12hr(log.clockIn)}</td>
                           <td className="px-4 py-3 text-red-500 font-semibold">{to12hr(log.clockOut)}</td>
@@ -303,9 +281,7 @@ export default function AttendancePage() {
                               log.status === "Completed" ? "bg-green-100 text-green-700" :
                               log.status === "Active"    ? "bg-yellow-100 text-yellow-700" :
                               "bg-gray-100 text-gray-500"
-                            }`}>
-                              {log.status || "—"}
-                            </span>
+                            }`}>{log.status || "—"}</span>
                           </td>
                         </tr>
                       );
