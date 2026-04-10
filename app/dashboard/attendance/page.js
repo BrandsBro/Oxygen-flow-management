@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { clockIn, clockOut, getAttendance } from "@/lib/api";
-import { LogIn, LogOut, Clock, Calendar, Users, CheckCircle } from "lucide-react";
+import { LogIn, LogOut, Clock, CheckCircle } from "lucide-react";
 
 function to12hr(time24) {
   if (!time24) return "—";
@@ -91,14 +91,11 @@ export default function AttendancePage() {
   const isClockedOut = todayLog && todayLog.clockIn && todayLog.clockOut;
 
   const hours12 = currentTime.getHours() % 12 || 12;
-  const minutes  = String(currentTime.getMinutes()).padStart(2, "0");
-  const seconds  = String(currentTime.getSeconds()).padStart(2, "0");
-  const ampm     = currentTime.getHours() >= 12 ? "PM" : "AM";
+  const minutes = String(currentTime.getMinutes()).padStart(2, "0");
+  const seconds = String(currentTime.getSeconds()).padStart(2, "0");
+  const ampm    = currentTime.getHours() >= 12 ? "PM" : "AM";
 
-  // Stats
-  const totalDays      = logs.filter(l => !isAdmin || l.member === user?.fullName).length;
-  const completedDays  = logs.filter(l => (!isAdmin || l.member === user?.fullName) && l.status === "Completed").length;
-  const activeDays     = logs.filter(l => (!isAdmin || l.member === user?.fullName) && l.status === "Active").length;
+  const completedDays = logs.filter(l => l.member === user?.fullName && l.status === "Completed").length;
 
   return (
     <div className="p-6 space-y-6">
@@ -106,45 +103,18 @@ export default function AttendancePage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Attendance</h1>
         <p className="text-sm text-gray-400">
-          {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          {new Date().toLocaleDateString("en-GB", {
+            weekday: "long", day: "numeric", month: "long", year: "numeric"
+          })}
         </p>
       </div>
 
-      {/* Top Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-blue-400">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-            <Calendar size={18} className="text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Total Days</p>
-            <p className="text-2xl font-bold text-gray-800">{totalDays}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-green-400">
-          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-            <CheckCircle size={18} className="text-green-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Completed</p>
-            <p className="text-2xl font-bold text-gray-800">{completedDays}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 border-l-4 border-yellow-400">
-          <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-            <Clock size={18} className="text-yellow-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Active Today</p>
-            <p className="text-2xl font-bold text-gray-800">{activeDays}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-3 gap-5">
+
         {/* Clock Widget */}
-        <div className="col-span-1 space-y-4">
+        <div className="col-span-1">
           <div className="bg-gray-950 rounded-2xl p-6 text-center space-y-5">
+
             {/* Live Clock */}
             <div>
               <div className="flex items-end justify-center gap-1">
@@ -154,7 +124,9 @@ export default function AttendancePage() {
                 <p className="text-xl font-bold text-blue-400 mb-1">{ampm}</p>
               </div>
               <p className="text-gray-500 text-xs mt-2">
-                {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {new Date().toLocaleDateString("en-GB", {
+                  day: "numeric", month: "short", year: "numeric"
+                })}
               </p>
             </div>
 
@@ -169,21 +141,21 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Status Badge */}
+            {/* Status */}
             <div className={`rounded-xl px-4 py-2.5 text-sm font-medium ${
               isClockedIn  ? "bg-green-500/10 text-green-400 border border-green-500/20" :
               isClockedOut ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
               "bg-gray-800 text-gray-400"
             }`}>
               {isClockedIn  ? "● Currently Working" :
-               isClockedOut ? "✓ Shift Completed" :
+               isClockedOut ? "✓ Shift Completed"   :
                "○ Not Clocked In"}
             </div>
 
-            {/* Today Summary */}
+            {/* Today Summary — only show after clock in */}
             {todayLog && (
               <div className="bg-gray-900 rounded-xl p-4 space-y-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Today's Summary</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Today</p>
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-green-400" />
@@ -191,13 +163,15 @@ export default function AttendancePage() {
                   </div>
                   <span className="text-green-400 font-bold text-sm">{to12hr(todayLog.clockIn)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
-                    <span className="text-gray-400 text-xs">Clock Out</span>
+                {todayLog.clockOut && (
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-red-400" />
+                      <span className="text-gray-400 text-xs">Clock Out</span>
+                    </div>
+                    <span className="text-red-400 font-bold text-sm">{to12hr(todayLog.clockOut)}</span>
                   </div>
-                  <span className="text-red-400 font-bold text-sm">{to12hr(todayLog.clockOut)}</span>
-                </div>
+                )}
                 {todayLog.totalHours && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-800">
                     <span className="text-gray-400 text-xs">Total Hours</span>
@@ -207,6 +181,7 @@ export default function AttendancePage() {
               </div>
             )}
 
+            {/* Messages */}
             {message && (
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
                 <p className="text-green-400 text-xs">{message}</p>
@@ -220,6 +195,7 @@ export default function AttendancePage() {
 
             {/* Buttons */}
             <div className="space-y-2">
+              {/* Not clocked in yet */}
               {!todayLog && (
                 <button
                   onClick={handleClockIn}
@@ -230,6 +206,8 @@ export default function AttendancePage() {
                   {actionLoading ? "Processing..." : "Clock In"}
                 </button>
               )}
+
+              {/* Clocked in → show clock out */}
               {isClockedIn && (
                 <button
                   onClick={handleClockOut}
@@ -240,6 +218,8 @@ export default function AttendancePage() {
                   {actionLoading ? "Processing..." : "Clock Out"}
                 </button>
               )}
+
+              {/* Done for today */}
               {isClockedOut && (
                 <div className="bg-gray-800 rounded-xl py-3 text-center">
                   <p className="text-gray-400 text-sm">✓ Done for today</p>
@@ -256,11 +236,20 @@ export default function AttendancePage() {
               <p className="text-sm font-semibold text-gray-700">
                 {isAdmin ? "All Attendance Records" : "My Attendance History"}
               </p>
-              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{logs.length} days</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">
+                  {completedDays} days completed
+                </span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
+                  {logs.length} records
+                </span>
+              </div>
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>
+              <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">
+                Loading...
+              </div>
             ) : logs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
                 <Clock size={24} className="text-gray-300" />
@@ -270,7 +259,7 @@ export default function AttendancePage() {
               <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-white z-10">
-                    <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide text-xs">
+                    <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
                       {isAdmin && <th className="px-4 py-3 text-left">Member</th>}
                       <th className="px-4 py-3 text-left">Date</th>
                       <th className="px-4 py-3 text-left">Clock In</th>
@@ -280,46 +269,41 @@ export default function AttendancePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((log, i) => (
-                      <tr key={i} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                        log.date === new Date().toLocaleDateString("en-GB") ? "bg-blue-50/50" : ""
-                      }`}>
-                        {isAdmin && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                                {log.member?.[0]}
+                    {logs.map((log, i) => {
+                      const isToday = log.date === new Date().toLocaleDateString("en-GB");
+                      return (
+                        <tr key={i} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${isToday ? "bg-blue-50/40" : ""}`}>
+                          {isAdmin && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                  {log.member?.[0]}
+                                </div>
+                                <span className="font-medium text-gray-700">{log.member}</span>
                               </div>
-                              <span className="font-medium text-gray-700">{log.member}</span>
-                            </div>
-                          </td>
-                        )}
-                        <td className="px-4 py-3 text-gray-600 font-medium">
-                          {log.date}
-                          {log.date === new Date().toLocaleDateString("en-GB") && (
-                            <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Today</span>
+                            </td>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-green-600 font-semibold">{to12hr(log.clockIn)}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-red-500 font-semibold">{to12hr(log.clockOut)}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-blue-600 font-semibold">{log.totalHours || "—"}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            log.status === "Completed" ? "bg-green-100 text-green-700" :
-                            log.status === "Active"    ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-500"
-                          }`}>
-                            {log.status || "—"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-3 text-gray-600 font-medium">
+                            {log.date}
+                            {isToday && (
+                              <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-xs">Today</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-green-600 font-semibold">{to12hr(log.clockIn)}</td>
+                          <td className="px-4 py-3 text-red-500 font-semibold">{to12hr(log.clockOut)}</td>
+                          <td className="px-4 py-3 text-blue-600 font-semibold">{log.totalHours || "—"}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              log.status === "Completed" ? "bg-green-100 text-green-700" :
+                              log.status === "Active"    ? "bg-yellow-100 text-yellow-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>
+                              {log.status || "—"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
