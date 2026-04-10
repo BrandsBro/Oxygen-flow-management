@@ -1,16 +1,12 @@
 const SHEET_API = process.env.SHEET_API_URL;
 
-// Simple in-memory cache
 const cache = new Map();
-const CACHE_TTL = 30 * 1000; // 30 seconds
+const CACHE_TTL = 30 * 1000;
 
 function getCached(key) {
   const entry = cache.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.time > CACHE_TTL) {
-    cache.delete(key);
-    return null;
-  }
+  if (Date.now() - entry.time > CACHE_TTL) { cache.delete(key); return null; }
   return entry.data;
 }
 
@@ -24,15 +20,13 @@ export async function GET(request) {
     const params = searchParams.toString();
     const action = searchParams.get("action");
 
-    // Only cache GET requests for read operations
-    const cacheable = ["getTickets", "getMembers", "getStats", "getDashboardData", "getAttendance"];
+    // Never cache attendance — always fresh
+    const cacheable = ["getTickets", "getMembers", "getStats", "getDashboardData"];
+    const neverCache = ["getAttendance", "getTodayAttendance"];
+
     if (cacheable.includes(action)) {
       const cached = getCached(params);
-      if (cached) {
-        return Response.json(cached, {
-          headers: { "X-Cache": "HIT" }
-        });
-      }
+      if (cached) return Response.json(cached, { headers: { "X-Cache": "HIT" } });
     }
 
     const res = await fetch(`${SHEET_API}?${params}`, {
@@ -43,9 +37,7 @@ export async function GET(request) {
     const text = await res.text();
     const data = JSON.parse(text);
 
-    if (cacheable.includes(action)) {
-      setCached(params, data);
-    }
+    if (cacheable.includes(action)) setCached(params, data);
 
     return Response.json(data);
   } catch (err) {
@@ -67,7 +59,7 @@ export async function POST(request) {
     const text = await res.text();
     const data = JSON.parse(text);
 
-    // Clear cache on any write operation
+    // Clear cache on writes
     cache.clear();
 
     return Response.json(data);

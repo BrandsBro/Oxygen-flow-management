@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { clockIn, clockOut, getAttendance } from "@/lib/api";
-import { LogIn, LogOut, Clock, CheckCircle } from "lucide-react";
+import { LogIn, LogOut, Clock } from "lucide-react";
 
 function to12hr(time24) {
   if (!time24) return "—";
@@ -74,17 +74,32 @@ export default function AttendancePage() {
   const handleClockIn = async () => {
     setActionLoading(true); setMessage(""); setError("");
     const res = await clockIn(user?.fullName);
-    if (res.success) { setMessage(res.message); await load(); }
-    else setError(res.message);
-    setActionLoading(false);
+    if (res.success) {
+      setMessage(res.message);
+      // Wait 1.5s for sheet to save then reload
+      setTimeout(async () => {
+        await load();
+        setActionLoading(false);
+      }, 1500);
+    } else {
+      setError(res.message);
+      setActionLoading(false);
+    }
   };
 
   const handleClockOut = async () => {
     setActionLoading(true); setMessage(""); setError("");
     const res = await clockOut(user?.fullName);
-    if (res.success) { setMessage(`${res.message} • Total: ${res.totalHours} hrs`); await load(); }
-    else setError(res.message);
-    setActionLoading(false);
+    if (res.success) {
+      setMessage(`${res.message} • Total: ${res.totalHours} hrs`);
+      setTimeout(async () => {
+        await load();
+        setActionLoading(false);
+      }, 1500);
+    } else {
+      setError(res.message);
+      setActionLoading(false);
+    }
   };
 
   const isClockedIn  = todayLog && todayLog.clockIn && !todayLog.clockOut;
@@ -99,7 +114,6 @@ export default function AttendancePage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Attendance</h1>
         <p className="text-sm text-gray-400">
@@ -110,12 +124,9 @@ export default function AttendancePage() {
       </div>
 
       <div className="grid grid-cols-3 gap-5">
-
         {/* Clock Widget */}
         <div className="col-span-1">
           <div className="bg-gray-950 rounded-2xl p-6 text-center space-y-5">
-
-            {/* Live Clock */}
             <div>
               <div className="flex items-end justify-center gap-1">
                 <p className="text-5xl font-bold text-white font-mono">
@@ -130,7 +141,6 @@ export default function AttendancePage() {
               </p>
             </div>
 
-            {/* User */}
             <div className="flex items-center justify-center gap-2">
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
                 {user?.fullName?.[0]}
@@ -141,7 +151,6 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Status */}
             <div className={`rounded-xl px-4 py-2.5 text-sm font-medium ${
               isClockedIn  ? "bg-green-500/10 text-green-400 border border-green-500/20" :
               isClockedOut ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
@@ -152,7 +161,6 @@ export default function AttendancePage() {
                "○ Not Clocked In"}
             </div>
 
-            {/* Today Summary — only show after clock in */}
             {todayLog && (
               <div className="bg-gray-900 rounded-xl p-4 space-y-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Today</p>
@@ -181,7 +189,6 @@ export default function AttendancePage() {
               </div>
             )}
 
-            {/* Messages */}
             {message && (
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
                 <p className="text-green-400 text-xs">{message}</p>
@@ -193,9 +200,7 @@ export default function AttendancePage() {
               </div>
             )}
 
-            {/* Buttons */}
             <div className="space-y-2">
-              {/* Not clocked in yet */}
               {!todayLog && (
                 <button
                   onClick={handleClockIn}
@@ -203,11 +208,9 @@ export default function AttendancePage() {
                   className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white font-semibold py-3.5 rounded-xl transition-colors"
                 >
                   <LogIn size={18} />
-                  {actionLoading ? "Processing..." : "Clock In"}
+                  {actionLoading ? "Saving..." : "Clock In"}
                 </button>
               )}
-
-              {/* Clocked in → show clock out */}
               {isClockedIn && (
                 <button
                   onClick={handleClockOut}
@@ -215,11 +218,9 @@ export default function AttendancePage() {
                   className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-900 text-white font-semibold py-3.5 rounded-xl transition-colors"
                 >
                   <LogOut size={18} />
-                  {actionLoading ? "Processing..." : "Clock Out"}
+                  {actionLoading ? "Saving..." : "Clock Out"}
                 </button>
               )}
-
-              {/* Done for today */}
               {isClockedOut && (
                 <div className="bg-gray-800 rounded-xl py-3 text-center">
                   <p className="text-gray-400 text-sm">✓ Done for today</p>
@@ -237,19 +238,13 @@ export default function AttendancePage() {
                 {isAdmin ? "All Attendance Records" : "My Attendance History"}
               </p>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400">
-                  {completedDays} days completed
-                </span>
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
-                  {logs.length} records
-                </span>
+                <span className="text-xs text-gray-400">{completedDays} days completed</span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{logs.length} records</span>
               </div>
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">
-                Loading...
-              </div>
+              <div className="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">Loading...</div>
             ) : logs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
                 <Clock size={24} className="text-gray-300" />
