@@ -13,24 +13,28 @@ function to12hr(time24) {
   return `${hour12}:${m} ${ampm}`;
 }
 
-function getTodayStr() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${mm}/${dd}/${d.getFullYear()}`;
-}
-
-function displayDate(s) {
-  if (!s) return "";
-  const [m, d, y] = s.split("/");
-  return `${d}/${m}/${y}`;
-}
-
 function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+// Normalize log object — always lowercase keys
+function normalizeLog(log) {
+  if (!log) return null;
+  return {
+    logId:          log["Log ID"]           || log.logId          || "",
+    member:         log["Member Name"]       || log.member         || "",
+    date:           log["Date"]              || log.date           || "",
+    clockIn:        log["Clock In"]          || log.clockIn        || "",
+    clockOut:       log["Clock Out"]         || log.clockOut       || "",
+    totalHours:     log["Total Hours"]       || log.totalHours     || "",
+    status:         log["Status"]            || log.status         || "",
+    pauseStart:     log["Pause Start"]       || log.pauseStart     || "",
+    totalPauseMins: log["Total Pause Mins"]  || log.totalPauseMins || 0,
+    pauseCount:     log["Pause Count"]       || log.pauseCount     || 0,
+  };
 }
 
 export default function AttendancePage() {
@@ -43,34 +47,27 @@ export default function AttendancePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Timer state
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
 
+  // Live clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Start/stop timer based on status
+  // Work timer — only runs when Active
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-
-    if (todayLog && todayLog.status === "Active") {
-      // Calculate initial elapsed: (now - clockIn) - totalPauseMins
-      const [inH, inM] = (todayLog.clockIn || "0:0").split(":").map(Number);
+    if (todayLog?.status === "Active" && todayLog?.clockIn) {
+      const [inH, inM] = todayLog.clockIn.split(":").map(Number);
       const now = new Date();
       const totalMins = (now.getHours() * 60 + now.getMinutes()) - (inH * 60 + inM);
       const pauseMins = Number(todayLog.totalPauseMins) || 0;
       const workSecs  = Math.max(0, (totalMins - pauseMins) * 60);
       setElapsedSeconds(workSecs);
-
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds(s => s + 1);
-      }, 1000);
+      timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
     }
-
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [todayLog?.status]);
 
@@ -79,23 +76,55 @@ export default function AttendancePage() {
     const member = isAdmin ? null : user.fullName;
     const res = await getAttendance(member);
     if (res.success) {
-      const today = getTodayStr();
-      const grouped = {};
-      res.data.forEach((log) => {
-        const key = `${log["Member Name"]}_${log["Date"]}`;
-        if (!grouped[key]) grouped[key] = log;
+      // Normalize all logs
+      const normalized = res.data.map(normalizeLog);
+
+      // Sort newest first
+      const sorted = normalized.sort((a, b) => {
+        const parse = (s) => {
+          if (!s) return 0;
+          // Handle both MM/DD/YYYY and DD/MM/YYYY by trying both
+          const parts = s.split("/");
+          if (parts.length === 3) return new Date(`${parts[2]}-${parts[0]}-${parts[1]}`).getTime();
+          return 0;
+        };
+        return parse(b.date) - parse(a.date);
       });
 
-      const arr = Object.values(grouped).sort((a, b) => {
-        const parse = (s) => { const [m,d,y] = s.split("/"); return new Date(`${y}-${m}-${d}`); };
-        return parse(b["Date"]) - parse(a["Date"]);
+      setLogs(sorted);
+
+      // Find today's log for current user — match by checking if it has no clockOut and is recent
+      // Use multiple strategies to find today's log
+      const todayRaw = res.data.find(l => {
+        const memberMatch = l["Member Name"] === user.fullName;
+        const noClockOut  = !l["Clock Out"] || String(l["Clock Out"]).trim() === "";
+        const hasClockIn  = l["Clock In"] && String(l["Clock In"]).trim() !== "";
+        // Active or Paused = today's session
+        const isActive = l["Status"] === "Active" || l["Status"] === "Paused";
+        return memberMatch && hasClockIn && noClockOut && isActive;
       });
 
-      setLogs(arr);
-      const myToday = res.data.find(
-        l => l["Member Name"] === user.fullName && l["Date"] === today
-      );
-      setTodayLog(myToday || null);
+      if (todayRaw) {
+        setTodayLog(normalizeLog(todayRaw));
+      } else {
+        // Check if completed today
+        const today = new Date();
+        const mm = String(today.getMonth()+1).padStart(2,"0");
+        const dd = String(today.getDate()).padStart(2,"0");
+        const yyyy = today.getFullYear();
+        // Try both formats
+        const todayFormats = [
+          `${mm}/${dd}/${yyyy}`,
+          `${dd}/${mm}/${yyyy}`,
+        ];
+
+        const completedToday = res.data.find(l => {
+          return l["Member Name"] === user.fullName &&
+            todayFormats.some(fmt => l["Date"] === fmt);
+        });
+
+        setTodayLog(completedToday ? normalizeLog(completedToday) : null);
+      }
     }
     setLoading(false);
   }
@@ -107,8 +136,21 @@ export default function AttendancePage() {
     const res = await clockIn(user.fullName);
     if (res.success) {
       setMessage(res.message);
+      // Optimistic update
+      const now = new Date();
+      setTodayLog({
+        member: user.fullName,
+        date: "",
+        clockIn: `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`,
+        clockOut: "",
+        totalHours: "",
+        status: "Active",
+        pauseStart: "",
+        totalPauseMins: 0,
+        pauseCount: 0,
+      });
       setElapsedSeconds(0);
-      setTimeout(async () => { await load(); setActionLoading(false); }, 1500);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else { setError(res.message); setActionLoading(false); }
   };
 
@@ -118,7 +160,9 @@ export default function AttendancePage() {
     const res = await pauseClock(user.fullName);
     if (res.success) {
       setMessage(res.message);
-      setTimeout(async () => { await load(); setActionLoading(false); }, 1500);
+      // Optimistic update
+      setTodayLog(prev => prev ? { ...prev, status: "Paused" } : prev);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else { setError(res.message); setActionLoading(false); }
   };
 
@@ -127,7 +171,9 @@ export default function AttendancePage() {
     const res = await resumeClock(user.fullName);
     if (res.success) {
       setMessage(res.message);
-      setTimeout(async () => { await load(); setActionLoading(false); }, 1500);
+      // Optimistic update
+      setTodayLog(prev => prev ? { ...prev, status: "Active", pauseStart: "" } : prev);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else { setError(res.message); setActionLoading(false); }
   };
 
@@ -137,22 +183,28 @@ export default function AttendancePage() {
     const res = await clockOut(user.fullName);
     if (res.success) {
       setMessage(`${res.message} • Work: ${res.totalHours} hrs`);
-      if (res.totalPauseMins > 0) setMessage(m => m + ` • Paused: ${res.totalPauseMins} mins`);
-      setTimeout(async () => { await load(); setActionLoading(false); }, 1500);
+      setTodayLog(prev => prev ? { ...prev, status: "Completed" } : prev);
+      setTimeout(async () => { await load(); setActionLoading(false); }, 2000);
     } else { setError(res.message); setActionLoading(false); }
   };
 
-  const status     = todayLog?.status || null;
-  const isWorking  = status === "Active";
-  const isPaused   = status === "Paused";
-  const isDone     = status === "Completed";
+  const isWorking  = todayLog?.status === "Active";
+  const isPaused   = todayLog?.status === "Paused";
+  const isDone     = todayLog?.status === "Completed";
   const notStarted = !todayLog;
 
   const hours12 = currentTime.getHours() % 12 || 12;
   const minutes = String(currentTime.getMinutes()).padStart(2,"0");
   const seconds = String(currentTime.getSeconds()).padStart(2,"0");
   const ampm    = currentTime.getHours() >= 12 ? "PM" : "AM";
-  const completedDays = logs.filter(l => l["Member Name"] === user?.fullName && l["Status"] === "Completed").length;
+  const completedDays = logs.filter(l => l.member === user?.fullName && l.status === "Completed").length;
+
+  function displayDate(s) {
+    if (!s) return "—";
+    const parts = s.split("/");
+    if (parts.length === 3) return `${parts[1]}/${parts[0]}/${parts[2]}`;
+    return s;
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -167,8 +219,6 @@ export default function AttendancePage() {
         {/* Clock Widget */}
         <div className="col-span-1">
           <div className="bg-gray-950 rounded-2xl p-6 text-center space-y-4">
-
-            {/* Clock */}
             <div>
               <div className="flex items-end justify-center gap-1">
                 <p className="text-4xl font-bold text-white font-mono">{hours12}:{minutes}:{seconds}</p>
@@ -179,7 +229,6 @@ export default function AttendancePage() {
               </p>
             </div>
 
-            {/* User */}
             <div className="flex items-center justify-center gap-2">
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
                 {user?.fullName?.[0]}
@@ -197,7 +246,7 @@ export default function AttendancePage() {
               isDone    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
               "bg-gray-800 text-gray-400"
             }`}>
-              {isWorking ? "● Working" : isPaused ? "⏸ Paused" : isDone ? "✓ Completed" : "○ Not Started"}
+              {isWorking ? "● Working" : isPaused ? "⏸ On Break" : isDone ? "✓ Completed" : "○ Not Started"}
             </div>
 
             {/* Work Timer */}
@@ -208,37 +257,42 @@ export default function AttendancePage() {
               </div>
             )}
 
+            {/* Paused info */}
             {isPaused && (
               <div className="bg-gray-900 rounded-xl p-3">
                 <p className="text-xs text-gray-500 mb-1">⏸ On Break</p>
-                <p className="text-sm text-yellow-400 font-medium">Paused at {to12hr(todayLog?.["Pause Start"])}</p>
-                <p className="text-xs text-gray-500 mt-1">Breaks taken: {todayLog?.["Pause Count"] || 0}</p>
+                {todayLog?.pauseStart && (
+                  <p className="text-sm text-yellow-400 font-medium">Since {to12hr(todayLog.pauseStart)}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Breaks: {todayLog?.pauseCount || 0}</p>
               </div>
             )}
 
             {/* Today Summary */}
             {todayLog && (
               <div className="bg-gray-900 rounded-xl p-3 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Clock In</span>
-                  <span className="text-green-400 font-medium">{to12hr(todayLog["Clock In"])}</span>
-                </div>
-                {todayLog["Clock Out"] && (
+                {todayLog.clockIn && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Clock In</span>
+                    <span className="text-green-400 font-medium">{to12hr(todayLog.clockIn)}</span>
+                  </div>
+                )}
+                {todayLog.clockOut && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Clock Out</span>
-                    <span className="text-red-400 font-medium">{to12hr(todayLog["Clock Out"])}</span>
+                    <span className="text-red-400 font-medium">{to12hr(todayLog.clockOut)}</span>
                   </div>
                 )}
-                {Number(todayLog["Total Pause Mins"]) > 0 && (
+                {Number(todayLog.totalPauseMins) > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Total Break</span>
-                    <span className="text-yellow-400 font-medium">{todayLog["Total Pause Mins"]} mins</span>
+                    <span className="text-gray-500">Break Time</span>
+                    <span className="text-yellow-400 font-medium">{todayLog.totalPauseMins} mins</span>
                   </div>
                 )}
-                {todayLog["Total Hours"] && (
+                {todayLog.totalHours && (
                   <div className="flex justify-between border-t border-gray-800 pt-2">
                     <span className="text-gray-500">Work Hours</span>
-                    <span className="text-blue-400 font-bold">{todayLog["Total Hours"]}</span>
+                    <span className="text-blue-400 font-bold">{todayLog.totalHours}</span>
                   </div>
                 )}
               </div>
@@ -252,15 +306,14 @@ export default function AttendancePage() {
               {notStarted && (
                 <button onClick={handleClockIn} disabled={actionLoading}
                   className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white font-semibold py-3 rounded-xl transition-colors">
-                  <LogIn size={16} />{actionLoading ? "Starting..." : "Clock In"}
+                  <LogIn size={16} />{actionLoading ? "Saving..." : "Clock In"}
                 </button>
               )}
-
               {isWorking && (
                 <>
                   <button onClick={handlePause} disabled={actionLoading}
                     className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-yellow-800 text-white font-semibold py-3 rounded-xl transition-colors">
-                    <Pause size={16} />{actionLoading ? "Pausing..." : "Pause"}
+                    <Pause size={16} />{actionLoading ? "Saving..." : "Pause"}
                   </button>
                   <button onClick={handleClockOut} disabled={actionLoading}
                     className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-900 text-white font-semibold py-3 rounded-xl transition-colors">
@@ -268,12 +321,11 @@ export default function AttendancePage() {
                   </button>
                 </>
               )}
-
               {isPaused && (
                 <>
                   <button onClick={handleResume} disabled={actionLoading}
                     className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white font-semibold py-3 rounded-xl transition-colors">
-                    <Play size={16} />{actionLoading ? "Resuming..." : "Resume"}
+                    <Play size={16} />{actionLoading ? "Saving..." : "Resume"}
                   </button>
                   <button onClick={handleClockOut} disabled={actionLoading}
                     className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-900 text-white font-semibold py-3 rounded-xl transition-colors">
@@ -281,7 +333,6 @@ export default function AttendancePage() {
                   </button>
                 </>
               )}
-
               {isDone && (
                 <div className="bg-gray-800 rounded-xl py-3 text-center">
                   <p className="text-gray-400 text-sm">✓ Done for today</p>
@@ -326,41 +377,35 @@ export default function AttendancePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((log, i) => {
-                      const isToday = log["Date"] === getTodayStr();
-                      return (
-                        <tr key={i} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${isToday ? "bg-blue-50/40" : ""}`}>
-                          {isAdmin && (
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                                  {log["Member Name"]?.[0]}
-                                </div>
-                                <span className="font-medium text-gray-700">{log["Member Name"]}</span>
-                              </div>
-                            </td>
-                          )}
-                          <td className="px-4 py-3 text-gray-600 font-medium">
-                            {displayDate(log["Date"])}
-                            {isToday && <span className="ml-2 bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-xs">Today</span>}
-                          </td>
-                          <td className="px-4 py-3 text-green-600 font-semibold">{to12hr(log["Clock In"])}</td>
-                          <td className="px-4 py-3 text-red-500 font-semibold">{to12hr(log["Clock Out"])}</td>
-                          <td className="px-4 py-3 text-yellow-600 font-medium">
-                            {Number(log["Total Pause Mins"]) > 0 ? `${log["Total Pause Mins"]} mins` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-blue-600 font-semibold">{log["Total Hours"] || "—"}</td>
+                    {logs.map((log, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        {isAdmin && (
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              log["Status"] === "Completed" ? "bg-green-100 text-green-700" :
-                              log["Status"] === "Active"    ? "bg-blue-100 text-blue-700" :
-                              log["Status"] === "Paused"    ? "bg-yellow-100 text-yellow-700" :
-                              "bg-gray-100 text-gray-500"
-                            }`}>{log["Status"] || "—"}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                {log.member?.[0]}
+                              </div>
+                              <span className="font-medium text-gray-700">{log.member}</span>
+                            </div>
                           </td>
-                        </tr>
-                      );
-                    })}
+                        )}
+                        <td className="px-4 py-3 text-gray-600 font-medium">{displayDate(log.date)}</td>
+                        <td className="px-4 py-3 text-green-600 font-semibold">{to12hr(log.clockIn)}</td>
+                        <td className="px-4 py-3 text-red-500 font-semibold">{to12hr(log.clockOut)}</td>
+                        <td className="px-4 py-3 text-yellow-600 font-medium">
+                          {Number(log.totalPauseMins) > 0 ? `${log.totalPauseMins} mins` : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-blue-600 font-semibold">{log.totalHours || "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            log.status === "Completed" ? "bg-green-100 text-green-700" :
+                            log.status === "Active"    ? "bg-blue-100 text-blue-700" :
+                            log.status === "Paused"    ? "bg-yellow-100 text-yellow-700" :
+                            "bg-gray-100 text-gray-500"
+                          }`}>{log.status || "—"}</span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
