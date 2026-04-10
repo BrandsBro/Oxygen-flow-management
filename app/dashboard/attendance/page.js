@@ -13,6 +13,18 @@ function to12hr(time24) {
   return `${hour12}:${m} ${ampm}`;
 }
 
+// Fix date — handle both ISO and en-GB formats
+function formatDate(raw) {
+  if (!raw) return "";
+  // If it's ISO format like 2026-10-03T18:00:00.000Z
+  if (String(raw).includes("T")) {
+    const d = new Date(raw);
+    return d.toLocaleDateString("en-GB");
+  }
+  // Already in DD/MM/YYYY format
+  return String(raw);
+}
+
 export default function AttendancePage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin";
@@ -35,11 +47,12 @@ export default function AttendancePage() {
     if (res.success) {
       const grouped = {};
       res.data.forEach((log) => {
-        const key = `${log["Member Name"]}_${log["Date"]}`;
+        const fixedDate = formatDate(log["Date"]);
+        const key = `${log["Member Name"]}_${fixedDate}`;
         if (!grouped[key]) {
           grouped[key] = {
             member:     log["Member Name"],
-            date:       log["Date"],
+            date:       fixedDate,
             clockIn:    log["Clock In"]    || "",
             clockOut:   log["Clock Out"]   || "",
             totalHours: log["Total Hours"] || "",
@@ -62,6 +75,7 @@ export default function AttendancePage() {
       });
 
       setLogs(arr);
+
       const today = new Date().toLocaleDateString("en-GB");
       const todayKey = `${user?.fullName}_${today}`;
       setTodayLog(grouped[todayKey] || null);
@@ -76,7 +90,6 @@ export default function AttendancePage() {
     const res = await clockIn(user?.fullName);
     if (res.success) {
       setMessage(res.message);
-      // Wait 1.5s for sheet to save then reload
       setTimeout(async () => {
         await load();
         setActionLoading(false);
@@ -109,7 +122,6 @@ export default function AttendancePage() {
   const minutes = String(currentTime.getMinutes()).padStart(2, "0");
   const seconds = String(currentTime.getSeconds()).padStart(2, "0");
   const ampm    = currentTime.getHours() >= 12 ? "PM" : "AM";
-
   const completedDays = logs.filter(l => l.member === user?.fullName && l.status === "Completed").length;
 
   return (
@@ -135,9 +147,7 @@ export default function AttendancePage() {
                 <p className="text-xl font-bold text-blue-400 mb-1">{ampm}</p>
               </div>
               <p className="text-gray-500 text-xs mt-2">
-                {new Date().toLocaleDateString("en-GB", {
-                  day: "numeric", month: "short", year: "numeric"
-                })}
+                {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
               </p>
             </div>
 
@@ -265,7 +275,8 @@ export default function AttendancePage() {
                   </thead>
                   <tbody>
                     {logs.map((log, i) => {
-                      const isToday = log.date === new Date().toLocaleDateString("en-GB");
+                      const today = new Date().toLocaleDateString("en-GB");
+                      const isToday = log.date === today;
                       return (
                         <tr key={i} className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${isToday ? "bg-blue-50/40" : ""}`}>
                           {isAdmin && (
