@@ -20,11 +20,16 @@ export async function GET(request) {
     const params = searchParams.toString();
     const action = searchParams.get("action");
 
-    // Never cache attendance — always fresh
-    const cacheable = ["getTickets", "getMembers", "getStats", "getDashboardData"];
-    const neverCache = ["getAttendance", "getTodayAttendance"];
+    // Never cache these — always fresh
+    const neverCache = [
+      "getAttendance", "getTodayAttendance",
+      "getSales", "getProducts", "getWebsites"
+    ];
 
-    if (cacheable.includes(action)) {
+    // Only cache these
+    const cacheable = ["getTickets", "getMembers", "getStats", "getDashboardData", "getInvoices", "getPermissions"];
+
+    if (!neverCache.includes(action) && cacheable.includes(action)) {
       const cached = getCached(params);
       if (cached) return Response.json(cached, { headers: { "X-Cache": "HIT" } });
     }
@@ -59,7 +64,7 @@ export async function POST(request) {
     const text = await res.text();
     const data = JSON.parse(text);
 
-    // Clear cache on writes
+    // Clear all cache on any write
     cache.clear();
 
     return Response.json(data);
