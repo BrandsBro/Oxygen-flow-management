@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
-  Users, FileText, UsersRound, Settings, LogOut, Clock
+  Users, FileText, UsersRound, Settings, LogOut, Clock, Receipt
 } from "lucide-react";
 
 const allNavItems = [
@@ -13,6 +13,7 @@ const allNavItems = [
   { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            adminOnly: false },
   { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    adminOnly: false },
   { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           adminOnly: false },
+  { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         adminOnly: true  },
   { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           adminOnly: true  },
   { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        adminOnly: true  },
   { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      adminOnly: true  },
@@ -36,15 +37,10 @@ export default function Sidebar() {
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           return (
-            <Link
-              key={href}
-              href={href}
+            <Link key={href} href={href}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                active
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
-              }`}
-            >
+                active ? "bg-gray-800 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+              }`}>
               <Icon size={16} />
               {label}
             </Link>
@@ -62,10 +58,8 @@ export default function Sidebar() {
             <p className="text-gray-500 text-xs">{user?.role}</p>
           </div>
         </div>
-        <button
-          onClick={logout}
-          className="flex items-center gap-2 text-gray-400 hover:text-white text-xs transition-colors"
-        >
+        <button onClick={logout}
+          className="flex items-center gap-2 text-gray-400 hover:text-white text-xs transition-colors">
           <LogOut size={14} />
           Sign Out
         </button>
