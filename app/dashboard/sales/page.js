@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { usePermissions } from "@/context/PermissionContext";
 import { getSales, deleteSale } from "@/lib/api";
 import AddSaleModal from "@/components/sales/AddSaleModal";
 import { ShoppingCart, TrendingUp, Package, Trash2, Plus, RefreshCw } from "lucide-react";
@@ -25,7 +26,10 @@ const channelColors = {
 
 export default function SalesPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "Admin";
+  const { can } = usePermissions();
+  const canAdd    = can("sales", "add");
+  const canDelete = can("sales", "delete");
+
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -44,17 +48,16 @@ export default function SalesPage() {
   const handleRefresh = () => { setRefreshing(true); load(); };
 
   const handleDelete = async (id) => {
+    if (!canDelete) return;
     if (!confirm("Delete this sale?")) return;
     await deleteSale(id);
     await load();
   };
 
-  // Stats
   const totalRevenue  = sales.reduce((s, i) => s + (Number(i["Amount"]) || 0), 0);
   const totalOrders   = sales.length;
   const totalQuantity = sales.reduce((s, i) => s + (Number(i["Quantity"]) || 0), 0);
 
-  // Group by channel
   const byChannel = {};
   sales.forEach(s => {
     const ch = s["Channel"] || "Other";
@@ -65,7 +68,6 @@ export default function SalesPage() {
 
   return (
     <div className="p-6 space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Today's Sales</h1>
@@ -79,14 +81,15 @@ export default function SalesPage() {
             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
             Refresh
           </button>
-          <button onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-            <Plus size={16} /> Add Sale
-          </button>
+          {canAdd && (
+            <button onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <Plus size={16} /> Add Sale
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-400 flex items-center gap-4">
           <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -117,15 +120,12 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Channel Breakdown */}
       {Object.keys(byChannel).length > 0 && (
         <div className="grid grid-cols-4 gap-3">
           {Object.entries(byChannel).map(([ch, data]) => (
             <div key={ch} className="bg-white rounded-xl shadow-sm p-3 flex items-center justify-between">
               <div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${channelColors[ch] || "bg-gray-100 text-gray-600"}`}>
-                  {ch}
-                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${channelColors[ch] || "bg-gray-100 text-gray-600"}`}>{ch}</span>
                 <p className="text-xs text-gray-400 mt-1">{data.count} orders</p>
               </div>
               <p className="text-sm font-bold text-gray-700">${data.amount.toLocaleString()}</p>
@@ -134,7 +134,6 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Sales Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">Sales Log</p>
@@ -147,8 +146,9 @@ export default function SalesPage() {
           <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
             <ShoppingCart size={24} className="text-gray-300" />
             <p className="text-sm">No sales yet today</p>
-            <button onClick={() => setModalOpen(true)}
-              className="text-blue-500 text-xs hover:underline">Add first sale</button>
+            {canAdd && (
+              <button onClick={() => setModalOpen(true)} className="text-blue-500 text-xs hover:underline">Add first sale</button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -164,7 +164,7 @@ export default function SalesPage() {
                   <th className="px-4 py-3 text-left">Amount</th>
                   <th className="px-4 py-3 text-left">Notes</th>
                   <th className="px-4 py-3 text-left">Added By</th>
-                  {isAdmin && <th className="px-4 py-3 text-left"></th>}
+                  {canDelete && <th className="px-4 py-3 text-left"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -190,7 +190,7 @@ export default function SalesPage() {
                         <span className="text-gray-500">{sale["Added By"]}</span>
                       </div>
                     </td>
-                    {isAdmin && (
+                    {canDelete && (
                       <td className="px-4 py-3">
                         <button onClick={() => handleDelete(sale["Sale ID"])}
                           className="text-red-400 hover:text-red-600 transition-colors">
@@ -201,12 +201,11 @@ export default function SalesPage() {
                   </tr>
                 ))}
               </tbody>
-              {/* Total Row */}
               <tfoot>
                 <tr className="bg-gray-50 border-t-2 border-gray-200">
                   <td colSpan={6} className="px-4 py-3 text-xs font-semibold text-gray-600">Total</td>
                   <td className="px-4 py-3 text-green-600 font-bold text-sm">${totalRevenue.toLocaleString()}</td>
-                  <td colSpan={isAdmin ? 3 : 2} />
+                  <td colSpan={canDelete ? 3 : 2} />
                 </tr>
               </tfoot>
             </table>
@@ -214,7 +213,7 @@ export default function SalesPage() {
         )}
       </div>
 
-      <AddSaleModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={() => load()} />
+      {canAdd && <AddSaleModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={() => load()} />}
     </div>
   );
 }

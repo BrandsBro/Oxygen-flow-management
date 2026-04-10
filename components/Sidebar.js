@@ -1,9 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { getPermissions } from "@/lib/api";
+import { usePermissions } from "@/context/PermissionContext";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
   Users, FileText, UsersRound, Settings, LogOut,
@@ -12,15 +11,15 @@ import {
 
 const allNavItems = [
   { label: "Dashboard",      href: "/dashboard",            icon: LayoutDashboard, key: "dashboard",   adminOnly: false },
-  { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        key: "all_tasks",   adminOnly: true  },
+  { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        key: "tasks",       adminOnly: false },
   { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            key: "my_tasks",    adminOnly: false },
   { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    key: "daily_board", adminOnly: false },
   { label: "Today's Sales",  href: "/dashboard/sales",      icon: ShoppingCart,    key: "sales",       adminOnly: false },
   { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           key: "attendance",  adminOnly: false },
-  { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         key: "invoices",    adminOnly: true  },
-  { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           key: "cases",       adminOnly: true  },
-  { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        key: "reports",     adminOnly: true  },
-  { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      key: "team",        adminOnly: true  },
+  { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         key: "invoices",    adminOnly: false },
+  { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           key: "cases",       adminOnly: false },
+  { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        key: "reports",     adminOnly: false },
+  { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      key: "team",        adminOnly: false },
   { label: "Authority",      href: "/dashboard/authority",  icon: ShieldCheck,     key: "authority",   adminOnly: true  },
   { label: "Settings",       href: "/dashboard/settings",   icon: Settings,        key: "settings",    adminOnly: true  },
 ];
@@ -28,27 +27,14 @@ const allNavItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { canAccess, permissions } = usePermissions();
   const isAdmin = user?.role === "Admin";
-  const [agentPerms, setAgentPerms] = useState(null);
-
-  useEffect(() => {
-    if (!isAdmin && user?.id) {
-      getPermissions().then(res => {
-        if (res.success) {
-          const myPerm = res.data.find(p => p["Member ID"] === user.id);
-          setAgentPerms(myPerm || null);
-        }
-      });
-    }
-  }, [user?.id]);
 
   const navItems = allNavItems.filter(item => {
-    if (isAdmin) return true;
     if (item.key === "dashboard") return true;
-    if (item.adminOnly) return false;
-    if (item.key === "sales") return true; // everyone sees sales
-    if (agentPerms) return agentPerms[item.key] === true;
-    return ["my_tasks", "daily_board", "attendance", "sales"].includes(item.key);
+    if (item.adminOnly) return isAdmin;
+    if (isAdmin) return true;
+    return canAccess(item.key);
   });
 
   return (
