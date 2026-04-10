@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
-  Users, FileText, UsersRound, Settings, LogOut, Clock, Receipt
+  Users, FileText, UsersRound, Settings, LogOut,
+  Clock, Receipt, ShieldCheck
 } from "lucide-react";
 
 const allNavItems = [
@@ -17,6 +18,7 @@ const allNavItems = [
   { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           adminOnly: true  },
   { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        adminOnly: true  },
   { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      adminOnly: true  },
+  { label: "Authority",      href: "/dashboard/authority",  icon: ShieldCheck,     adminOnly: true  },
   { label: "Settings",       href: "/dashboard/settings",   icon: Settings,        adminOnly: true  },
 ];
 
@@ -33,7 +35,7 @@ export default function Sidebar() {
         <p className="text-gray-500 text-xs">Support Desk</p>
       </div>
 
-      <nav className="flex-1 px-2 py-4 space-y-0.5">
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           return (

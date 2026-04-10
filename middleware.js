@@ -19,6 +19,7 @@ export function middleware(request) {
     "/dashboard/team",
     "/dashboard/settings",
     "/dashboard/invoices",
+    "/dashboard/authority",
   ];
 
   if (userCookie) {
