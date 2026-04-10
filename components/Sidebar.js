@@ -7,7 +7,7 @@ import { getPermissions } from "@/lib/api";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
   Users, FileText, UsersRound, Settings, LogOut,
-  Clock, Receipt, ShieldCheck
+  Clock, Receipt, ShieldCheck, ShoppingCart
 } from "lucide-react";
 
 const allNavItems = [
@@ -15,6 +15,7 @@ const allNavItems = [
   { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        key: "all_tasks",   adminOnly: true  },
   { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            key: "my_tasks",    adminOnly: false },
   { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    key: "daily_board", adminOnly: false },
+  { label: "Today's Sales",  href: "/dashboard/sales",      icon: ShoppingCart,    key: "sales",       adminOnly: false },
   { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           key: "attendance",  adminOnly: false },
   { label: "Invoices",       href: "/dashboard/invoices",   icon: Receipt,         key: "invoices",    adminOnly: true  },
   { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           key: "cases",       adminOnly: true  },
@@ -42,16 +43,12 @@ export default function Sidebar() {
   }, [user?.id]);
 
   const navItems = allNavItems.filter(item => {
-    // Admins see everything
     if (isAdmin) return true;
-    // Always show dashboard
     if (item.key === "dashboard") return true;
-    // Hide admin-only pages
     if (item.adminOnly) return false;
-    // Check permissions for agent
+    if (item.key === "sales") return true; // everyone sees sales
     if (agentPerms) return agentPerms[item.key] === true;
-    // Default: show my_tasks, daily_board, attendance
-    return ["my_tasks", "daily_board", "attendance"].includes(item.key);
+    return ["my_tasks", "daily_board", "attendance", "sales"].includes(item.key);
   });
 
   return (
