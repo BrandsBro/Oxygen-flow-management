@@ -4,25 +4,25 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, ListTodo, User, CalendarDays,
-  Users, FileText, UsersRound, Settings, LogOut
+  Users, FileText, UsersRound, Settings, LogOut, Clock
 } from "lucide-react";
 
 const allNavItems = [
-  { label: "Dashboard",      href: "/dashboard",          icon: LayoutDashboard, adminOnly: false },
-  { label: "All Tasks",      href: "/dashboard/tasks",    icon: ListTodo,        adminOnly: true  },
-  { label: "My Tasks",       href: "/dashboard/mytasks",  icon: User,            adminOnly: false },
-  { label: "Daily Board",    href: "/dashboard/daily",    icon: CalendarDays,    adminOnly: false },
-  { label: "Customer Cases", href: "/dashboard/cases",    icon: Users,           adminOnly: true  },
-  { label: "Reports",        href: "/dashboard/reports",  icon: FileText,        adminOnly: true  },
-  { label: "Team",           href: "/dashboard/team",     icon: UsersRound,      adminOnly: true  },
-  { label: "Settings",       href: "/dashboard/settings", icon: Settings,        adminOnly: true  },
+  { label: "Dashboard",      href: "/dashboard",            icon: LayoutDashboard, adminOnly: false },
+  { label: "All Tasks",      href: "/dashboard/tasks",      icon: ListTodo,        adminOnly: true  },
+  { label: "My Tasks",       href: "/dashboard/mytasks",    icon: User,            adminOnly: false },
+  { label: "Daily Board",    href: "/dashboard/daily",      icon: CalendarDays,    adminOnly: false },
+  { label: "Attendance",     href: "/dashboard/attendance", icon: Clock,           adminOnly: false },
+  { label: "Customer Cases", href: "/dashboard/cases",      icon: Users,           adminOnly: true  },
+  { label: "Reports",        href: "/dashboard/reports",    icon: FileText,        adminOnly: true  },
+  { label: "Team",           href: "/dashboard/team",       icon: UsersRound,      adminOnly: true  },
+  { label: "Settings",       href: "/dashboard/settings",   icon: Settings,        adminOnly: true  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "Admin";
-
   const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
